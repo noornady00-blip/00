@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الكاشير الذكي</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        body { font-family: 'Cairo', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; color: white; overflow-x: hidden; }
+        .glass-panel { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
+        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        #reader { border: none !important; border-radius: 12px; overflow: hidden; } #reader video { border-radius: 12px; object-fit: cover; }
+    </style>
+</head>
+<body class="p-4 md:p-6 text-sm md:text-base">
+
+    <header class="flex flex-wrap justify-between items-center mb-6 gap-4 glass-panel p-4 rounded-2xl">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-3 rounded-xl shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-store text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold">نقاط البيع الذكية</h1>
+                <p class="text-xs text-gray-400" id="current-date">--/--/----</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="startNewSession()" class="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> ملف جديد
+            </button>
+            <button onclick="saveCurrentSession()" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i> حفظ اليوم
+            </button>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-l-emerald-500 flex justify-between items-center relative overflow-hidden">
+            <div class="absolute -right-4 -bottom-4 text-emerald-500/10 text-6xl"><i class="fa-solid fa-arrow-trend-up"></i></div>
+            <div>
+                <p class="text-gray-400 mb-1">إجمالي المبيعات</p>
+                <h2 class="text-3xl font-bold text-emerald-400" id="stat-sales">0.00 <span class="text-sm">ج.م</span></h2>
+            </div>
+            <div class="bg-emerald-500/20 text-emerald-400 p-3 rounded-full"><i class="fa-solid fa-cart-shopping"></i></div>
+        </div>
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-l-rose-500 flex justify-between items-center relative overflow-hidden">
+            <div class="absolute -right-4 -bottom-4 text-rose-500/10 text-6xl"><i class="fa-solid fa-arrow-rotate-left"></i></div>
+            <div>
+                <p class="text-gray-400 mb-1">إجمالي المرتجعات</p>
+                <h2 class="text-3xl font-bold text-rose-400" id="stat-returns">0.00 <span class="text-sm">ج.م</span></h2>
+            </div>
+            <div class="bg-rose-500/20 text-rose-400 p-3 rounded-full"><i class="fa-solid fa-rotate-left"></i></div>
+        </div>
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-l-indigo-500 flex justify-between items-center relative overflow-hidden">
+            <div class="absolute -right-4 -bottom-4 text-indigo-500/10 text-6xl"><i class="fa-solid fa-wallet"></i></div>
+            <div>
+                <p class="text-gray-400 mb-1">صافي الربح</p>
+                <h2 class="text-3xl font-bold text-indigo-400" id="stat-net">0.00 <span class="text-sm">ج.م</span></h2>
+            </div>
+            <div class="bg-indigo-500/20 text-indigo-400 p-3 rounded-full"><i class="fa-solid fa-coins"></i></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-1 flex flex-col gap-4">
+            <div class="glass-panel p-4 rounded-2xl flex flex-col items-center justify-center min-h-[500px] relative">
+                <div class="w-full flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg"><i class="fa-solid fa-camera mr-2"></i> قارئ الباركود</h3>
+                    <div class="flex gap-2">
+                        <button onclick="startScanner()" class="bg-indigo-600 hover:bg-indigo-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors" title="تشغيل الكاميرا">
+                            <i class="fa-solid fa-play text-xs"></i>
+                        </button>
+                        <button onclick="stopScanner()" class="bg-rose-600 hover:bg-rose-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors" title="إيقاف الكاميرا">
+                            <i class="fa-solid fa-stop text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="reader" class="w-full min-h-[350px] md:min-h-[400px] bg-black/40 rounded-xl flex items-center justify-center relative shadow-inner overflow-hidden aspect-video">
+                    <div class="absolute flex flex-col items-center text-gray-400 text-sm">
+                        <i class="fa-solid fa-qrcode text-4xl mb-2 opacity-50"></i>
+                        <span>اضغط تشغيل لفتح الكاميرا</span>
+                    </div>
+                </div>
+                <div class="w-full mt-4">
+                    <label class="block text-xs text-gray-400 mb-1">إدخال الباركود يدوياً (للتجربة: 123456)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="manual-barcode" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="اكتب أو امسح الباركود هنا..." onkeypress="if(event.key === 'Enter') handleManualScan()">
+                        <button onclick="handleManualScan()" class="bg-indigo-600 hover:bg-indigo-700 px-4 rounded-xl transition-colors">
+                            <i class="fa-solid fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 glass-panel p-4 rounded-2xl flex flex-col">
+            <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-list-check mr-2"></i> عمليات اليوم الحالية</h3>
+            <div class="flex-1 overflow-auto rounded-xl border border-white/5">
+                <table class="w-full text-right text-sm">
+                    <thead class="bg-black/30 text-gray-300 sticky top-0 backdrop-blur-md">
+                        <tr>
+                            <th class="p-3 font-semibold rounded-tr-xl">الوقت</th>
+                            <th class="p-3 font-semibold">المنتج</th>
+                            <th class="p-3 font-semibold text-center">النوع</th>
+                            <th class="p-3 font-semibold">السعر</th>
+                            <th class="p-3 font-semibold rounded-tl-xl text-center">إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table" class="divide-y divide-white/5">
+                        <tr id="empty-state">
+                            <td colspan="5" class="p-8 text-center text-gray-500">
+                                <i class="fa-solid fa-box-open text-4xl mb-3 opacity-50 block"></i>
+                                لم يتم تسجيل أي عمليات بعد في هذه الجلسة
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="action-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl transform scale-95 transition-transform duration-300" id="action-modal-content">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fa-solid fa-tag"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-1" id="modal-product-name">اسم المنتج</h3>
+                <p class="text-indigo-300 font-bold text-xl"><span id="modal-product-price">0.00</span> ج.م</p>
+                <p class="text-xs text-gray-400 mt-2">باركود: <span id="modal-product-barcode">---</span></p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="processAction('sale')" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-500/20">
+                    <i class="fa-solid fa-check-circle text-xl"></i> تسجيل بيع
+                </button>
+                <button onclick="processAction('return')" class="bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 shadow-lg shadow-rose-500/20">
+                    <i class="fa-solid fa-rotate-left text-xl"></i> تسجيل مرتجع
+                </button>
+            </div>
+            <button onclick="closeModal('action-modal')" class="w-full mt-3 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-gray-300 transition-colors">إلغاء</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-slate-700 text-white px-6 py-3 rounded-xl shadow-2xl transition-all duration-300 opacity-0 translate-y-10 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-info text-indigo-400"></i>
+        <span id="toast-msg">رسالة</span>
+    </div>
+
+    <script>
+        // إعدادات النظام الحقيقي (تم إلغاء المحاكاة)
+        const CONFIG = { USE_MOCK_BACKEND: false };
+
+        let html5QrCode = null;
+        let isScanning = false;
+        let currentProduct = null;
+        let currentSessionId = localStorage.getItem('pos_session_id') || null;
+        let cart = JSON.parse(localStorage.getItem('pos_cart')) || [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('current-date').innerText = new Date().toLocaleDateString('ar-EG', options);
+            if (!currentSessionId) startNewSession();
+            else { renderTable(); updateTotals(); }
+        });
+
+        function playBeep(type = 'success') {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            osc.connect(gainNode); gainNode.connect(ctx.destination);
+            if (type === 'success') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.5, ctx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            } else {
+                osc.type = 'square'; osc.frequency.setValueAtTime(300, ctx.currentTime);
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            }
+            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
+        }
+
+        function startScanner() {
+            if (isScanning) return;
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 300, height: 250 } };
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+                .then(() => { isScanning = true; showToast('تم تشغيل الكاميرا بنجاح', 'success'); })
+                .catch(err => { showToast('تعذر الوصول للكاميرا.', 'error'); });
+        }
+
+        function stopScanner() {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().then(() => { isScanning = false; }).catch(err => console.log(err));
+            }
+        }
+
+        function handleManualScan() {
+            const input = document.getElementById('manual-barcode');
+            if (input.value.trim() !== '') { onScanSuccess(input.value.trim()); input.value = ''; }
+        }
+
+        function onScanSuccess(decodedText) {
+            if (isScanning) stopScanner();
+            playBeep('success');
+            fetchProductDetails(decodedText);
+        }
+
+        async function fetchProductDetails(barcode) {
+            try {
+                const response = await fetch(`api/get_product.php?barcode=${barcode}`);
+                const result = await response.json();
+                if (result.status === 'success') { showActionModal(result.data); } 
+                else { playBeep('error'); showToast(result.message, 'error'); if(!isScanning) startScanner(); }
+            } catch (error) { showToast('خطأ في الاتصال بالسيرفر', 'error'); }
+        }
+
+        async function saveActionToServer(actionType) {
+            const itemToSave = { product_id: currentProduct.id, session_id: currentSessionId, type: actionType, price: currentProduct.price, name: currentProduct.name, time: new Date().toLocaleTimeString('ar-EG') };
+            try {
+                const response = await fetch('api/save_sale.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(itemToSave)
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    itemToSave.id = result.sale_id;
+                    cart.unshift(itemToSave); saveStateLocally(); renderTable(); updateTotals(); closeModal('action-modal');
+                    showToast('تمت العملية بنجاح', 'success'); startScanner();
+                } else { showToast(result.message, 'error'); }
+            } catch (error) { showToast('خطأ في حفظ العملية', 'error'); }
+        }
+
+        async function startNewSession() {
+            if (cart.length > 0 && !confirm("لديك عمليات لم يتم حفظها. هل أنت متأكد؟")) return;
+            try {
+                const response = await fetch('api/create_session.php', { method: 'POST' });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    currentSessionId = result.session_id; cart = []; saveStateLocally(); renderTable(); updateTotals();
+                    showToast('تم إنشاء ملف يومية جديد', 'success');
+                }
+            } catch (error) { showToast('خطأ في الاتصال', 'error'); }
+        }
+
+        async function saveCurrentSession() {
+            if (cart.length === 0) { showToast('لا يوجد عمليات لحفظها', 'error'); return; }
+            const sessionName = prompt("أدخل اسم الملف:", "يومية " + new Date().toLocaleDateString('ar-EG'));
+            if (!sessionName) return;
+            const totals = calculateTotals();
+            const sessionData = { session_id: currentSessionId, name: sessionName, total_sales: totals.sales, total_returns: totals.returns, net_total: totals.net, items_sold: cart.filter(i => i.type === 'sale').length, items_returned: cart.filter(i => i.type === 'return').length };
+            try {
+                const response = await fetch('api/save_session.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sessionData)
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showToast('تم حفظ الملف النهائي بنجاح', 'success'); cart = []; currentSessionId = null; saveStateLocally(); startNewSession();
+                }
+            } catch(e) { showToast('خطأ في الحفظ النهائي', 'error'); }
+        }
+
+        function showActionModal(product) {
+            currentProduct = product;
+            document.getElementById('modal-product-name').innerText = product.name;
+            document.getElementById('modal-product-price').innerText = parseFloat(product.price).toFixed(2);
+            document.getElementById('modal-product-barcode').innerText = product.barcode;
+            document.getElementById('action-modal').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('action-modal-content').classList.remove('scale-95');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('action-modal-content').classList.add('scale-95');
+            currentProduct = null;
+            if (!isScanning) startScanner();
+        }
+
+        function processAction(type) { saveActionToServer(type); }
+
+        function renderTable() {
+            const tbody = document.getElementById('sales-table'); tbody.innerHTML = '';
+            if (cart.length === 0) {
+                tbody.innerHTML = `<tr id="empty-state"><td colspan="5" class="p-8 text-center text-gray-500"><i class="fa-solid fa-box-open text-4xl mb-3 opacity-50 block"></i> لم يتم تسجيل أي عمليات</td></tr>`; return;
+            }
+            cart.forEach((item, index) => {
+                const isSale = item.type === 'sale';
+                const typeBadge = isSale ? '<span class="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-xs">بيع</span>' : '<span class="bg-rose-500/20 text-rose-400 px-2 py-1 rounded text-xs">مرتجع</span>';
+                tbody.innerHTML += `<tr class="hover:bg-white/5 transition-colors group"><td class="p-3 text-gray-400 text-xs">${item.time}</td><td class="p-3 font-semibold">${item.name}</td><td class="p-3 text-center">${typeBadge}</td><td class="p-3 font-bold ${isSale ? 'text-emerald-400' : 'text-rose-400'}">${parseFloat(item.price).toFixed(2)}</td><td class="p-3 text-center"><button onclick="deleteItem(${index})" class="text-gray-500 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 p-2"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+            });
+        }
+
+        function calculateTotals() {
+            let sales = 0, returns = 0;
+            cart.forEach(item => { if (item.type === 'sale') sales += parseFloat(item.price); else if (item.type === 'return') returns += parseFloat(item.price); });
+            return { sales, returns, net: sales - returns };
+        }
+
+        function updateTotals() {
+            const t = calculateTotals();
+            document.getElementById('stat-sales').innerHTML = `${t.sales.toFixed(2)} <span class="text-sm">ج.م</span>`;
+            document.getElementById('stat-returns').innerHTML = `${t.returns.toFixed(2)} <span class="text-sm">ج.م</span>`;
+            document.getElementById('stat-net').innerHTML = `${t.net.toFixed(2)} <span class="text-sm">ج.م</span>`;
+        }
+
+        function deleteItem(index) {
+            if(confirm('هل أنت متأكد من الحذف؟')) { cart.splice(index, 1); saveStateLocally(); renderTable(); updateTotals(); }
+        }
+
+        function saveStateLocally() { localStorage.setItem('pos_cart', JSON.stringify(cart)); localStorage.setItem('pos_session_id', currentSessionId); }
+
+        let toastTimeout;
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast'); const icon = toast.querySelector('i');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-xl shadow-2xl transition-all duration-300 z-50 flex items-center gap-3 border';
+            if (type === 'success') { toast.classList.add('bg-emerald-900', 'border-emerald-700', 'text-white'); icon.className = 'fa-solid fa-check-circle text-emerald-400'; }
+            else if (type === 'error') { toast.classList.add('bg-rose-900', 'border-rose-700', 'text-white'); icon.className = 'fa-solid fa-circle-exclamation text-rose-400'; }
+            else { toast.classList.add('bg-slate-800', 'border-slate-700', 'text-white'); icon.className = 'fa-solid fa-circle-info text-indigo-400'; }
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-10'); }, 3000);
+        }
+    </script>
+</body>
+</html>
