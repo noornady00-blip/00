@@ -10,6 +10,14 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <script>
+        // framer-motion v10 UMD may expose as Motion or FramerMotion
+        if (!window.Motion && window.FramerMotion) window.Motion = window.FramerMotion;
+        // Ensure motion.div etc. exist as proper components
+        if (window.Motion && !window.Motion.motion && window.Motion.m) {
+            window.Motion.motion = window.Motion.m;
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Lucide Icons - Fixed Version -->
@@ -57,14 +65,28 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-        const { motion, AnimatePresence } = window.Motion;
+        const MotionLib = window.Motion || window.FramerMotion || {};
+        const motion = MotionLib.motion || MotionLib.m || {};
+        const AnimatePresence = MotionLib.AnimatePresence || (({ children }) => children);
 
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+        const firebaseConfig = JSON.parse(window.__firebase_config || 'null') || {
+            apiKey: "demo-key",
+            authDomain: "demo.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo-project.appspot.com",
+            messagingSenderId: "000000000000",
+            appId: "1:000000000000:web:0000000000000000"
+        };
         const appId = window.__app_id || 'glass-exam-pro-v2';
 
-        const app = Firebase.initializeApp(firebaseConfig);
-        const auth = Firebase.getAuth(app);
-        const db = Firebase.getFirestore(app);
+        let app, auth, db;
+        try {
+            app = Firebase.initializeApp(firebaseConfig);
+            auth = Firebase.getAuth(app);
+            db = Firebase.getFirestore(app);
+        } catch(e) {
+            console.warn("Firebase init error:", e);
+        }
 
         // Helper to refresh icons
         const refreshIcons = () => {
@@ -116,6 +138,7 @@
             useEffect(() => {
                 const initAuth = async () => {
                     try {
+                        if (!auth) return;
                         if (window.__initial_auth_token) {
                             await Firebase.signInWithCustomToken(auth, window.__initial_auth_token);
                         } else {
@@ -126,12 +149,13 @@
                     }
                 };
                 initAuth();
+                if (!auth) return;
                 const unsubscribe = Firebase.onAuthStateChanged(auth, setUser);
                 return () => unsubscribe();
             }, []);
 
             useEffect(() => {
-                if (!user) return;
+                if (!user || !db) return;
                 const unsubSub = Firebase.onSnapshot(Firebase.collection(db, 'artifacts', appId, 'public', 'data', 'subjects'), (snap) => {
                     setSubjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 }, (err) => console.log(err));
