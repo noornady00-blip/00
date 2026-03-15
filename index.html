@@ -80,35 +80,77 @@
         @media (max-width: 640px) { .text-5xl { font-size: 2rem !important; } .text-4xl { font-size: 1.7rem !important; } }
         select option { background: #1e293b; color: #f0f4ff; }
     </style>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp }
+            from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged }
+            from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDH2sWs7zmP_yuTF2TrsaXEqDAjchxm9Rk",
+            authDomain: "project-2900514498359875554.firebaseapp.com",
+            projectId: "project-2900514498359875554",
+            storageBucket: "project-2900514498359875554.firebasestorage.app",
+            messagingSenderId: "747587244212",
+            appId: "1:747587244212:web:87e7fdb95985604dde87e1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Sign in anonymously so Firestore rules allow read/write
+        signInAnonymously(auth).catch(e => console.warn('anon auth:', e));
+
+        // Expose helpers on window so Babel script can use them
+        window.FS = {
+            db, auth,
+            col:  (...p) => collection(db, ...p),
+            doc:  (...p) => doc(db, ...p),
+            add:  (ref, d) => addDoc(ref, { ...d, createdAt: serverTimestamp() }),
+            set:  (ref, d) => updateDoc(ref, d),
+            del:  (ref)   => deleteDoc(ref),
+            snap: (ref, cb, err) => onSnapshot(ref, cb, err || console.warn),
+        };
+        window.dispatchEvent(new Event('fs-ready'));
+    </script>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-    const { useState, useEffect, useCallback } = React;
+    const { useState, useEffect } = React;
     const MotionLib = window.Motion || window.FramerMotion || {};
     const motion = MotionLib.motion || MotionLib.m || {};
     const AnimatePresence = MotionLib.AnimatePresence || (({ children }) => children);
 
-    /* ─── localStorage DB ──────────────────────────────────────────────── */
-    // Simple reactive store using localStorage + custom event
-    const DB_KEY = 'nournady_db';
-    const EVENT = 'nournady_db_change';
+    /* ─── Firebase DB helpers ──────────────────────────────────────────── */
+    // Wait for the Firebase module script to expose window.FS
+    function waitFS() {
+        return new Promise(resolve => {
+            if (window.FS) { resolve(window.FS); return; }
+            window.addEventListener('fs-ready', () => resolve(window.FS), { once: true });
+        });
+    }
 
-    function readDB() {
-        try { return JSON.parse(localStorage.getItem(DB_KEY) || '{}'); } catch { return {}; }
-    }
-    function writeDB(data) {
-        localStorage.setItem(DB_KEY, JSON.stringify(data));
-        window.dispatchEvent(new Event(EVENT));
-    }
-    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+    // Collection path in Firestore: /data/{col}
+    const COL = col => ['data', col];
 
     const DB = {
-        getAll(col) { const d = readDB(); return Object.entries(d[col] || {}).map(([id, v]) => ({ id, ...v })); },
-        add(col, data) { const d = readDB(); if (!d[col]) d[col] = {}; const id = uid(); d[col][id] = { ...data, createdAt: Date.now() }; writeDB(d); return id; },
-        update(col, id, data) { const d = readDB(); if (d[col]?.[id]) { d[col][id] = { ...d[col][id], ...data }; writeDB(d); } },
-        remove(col, id) { const d = readDB(); if (d[col]) { delete d[col][id]; writeDB(d); } },
+        async add(col, data)         { const fs = await waitFS(); return addDoc ? null : await fs.add(fs.col(...COL(col)), data); },
+        async update(col, id, data)  { const fs = await waitFS(); await fs.set(fs.doc(...COL(col), id), data); },
+        async remove(col, id)        { const fs = await waitFS(); await fs.del(fs.doc(...COL(col), id)); },
+        async listen(col, cb)        { const fs = await waitFS(); return fs.snap(fs.col(...COL(col)), snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))); },
     };
+    // Shortcut add that waits for FS
+    async function dbAdd(col, data) { const fs = await waitFS(); return fs.add(fs.col(...COL(col)), data); }
+    async function dbUpdate(col, id, data) { const fs = await waitFS(); return fs.set(fs.doc(...COL(col), id), data); }
+    async function dbRemove(col, id) { const fs = await waitFS(); return fs.del(fs.doc(...COL(col), id)); }
+    function dbListen(col, cb) {
+        waitFS().then(fs => fs.snap(fs.col(...COL(col)), snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+    }
 
     /* ─── Shared Components ─────────────────────────────────────────────── */
     const GlassCard = ({ children, className = "" }) => (
@@ -148,17 +190,14 @@
         const [currentExamData, setCurrentExamData] = useState(null);
         const [showNotificationCenter, setShowNotificationCenter] = useState(false);
 
-        const loadData = useCallback(() => {
-            setSubjects(DB.getAll('subjects'));
-            setExams(DB.getAll('exams'));
-            setNotifications(DB.getAll('notifications'));
-        }, []);
-
         useEffect(() => {
-            loadData();
-            window.addEventListener(EVENT, loadData);
-            return () => window.removeEventListener(EVENT, loadData);
-        }, [loadData]);
+            const unsubs = [];
+            dbListen('subjects',      data => setSubjects(data));
+            dbListen('exams',         data => setExams(data));
+            dbListen('notifications', data => setNotifications(data));
+            // onSnapshot returns unsubscribe — but dbListen is fire-and-forget here;
+            // for cleanup we just let React unmount handle it (single-page app).
+        }, []);
 
         useEffect(() => { refreshIcons(); }, [view, subjects, exams, showNotificationCenter, darkMode]);
         useEffect(() => { document.body.classList.toggle('light-mode', !darkMode); }, [darkMode]);
@@ -397,7 +436,7 @@
                 return { ...q, userAnswer: ans[i], isCorrect };
             });
             const score = report.filter(r => r.isCorrect).length;
-            DB.update('exams', exam.id, { entryCount: (exam.entryCount || 0) + 1 });
+            dbUpdate('exams', exam.id, { entryCount: (exam.entryCount || 0) + 1 });
             onFinish({ score, total: exam.questions.length, report, time: format(sec) });
         };
 
@@ -608,21 +647,21 @@
 
         useEffect(() => { refreshIcons(); }, [tab, qs]);
 
-        const addS = () => {
+        const addS = async () => {
             const name = newSub.trim();
             if (!name) return;
-            DB.add('subjects', { name });
+            await dbAdd('subjects', { name });
             setNewSub('');
         };
 
-        const delS = (id) => DB.remove('subjects', id);
+        const delS = (id) => dbRemove('subjects', id);
 
-        const saveEditSub = (id) => {
-            if (editSubName.trim()) DB.update('subjects', id, { name: editSubName.trim() });
+        const saveEditSub = async (id) => {
+            if (editSubName.trim()) await dbUpdate('subjects', id, { name: editSubName.trim() });
             setEditSubId(null);
         };
 
-        const delE = (id) => DB.remove('exams', id);
+        const delE = (id) => dbRemove('exams', id);
 
         const editE = (e) => { setEditingExamId(e.id); setSelSub(e.subjectId); setETitle(e.title); setQs(e.questions || []); setTab('add'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
@@ -637,14 +676,14 @@
             refreshIcons();
         };
 
-        const saveE = () => {
+        const saveE = async () => {
             if (!selSub || !eTitle.trim() || qs.length === 0) return;
             if (editingExamId) {
-                DB.update('exams', editingExamId, { subjectId: selSub, title: eTitle.trim(), questions: qs });
+                await dbUpdate('exams', editingExamId, { subjectId: selSub, title: eTitle.trim(), questions: qs });
                 setEditingExamId(null);
             } else {
-                DB.add('exams', { subjectId: selSub, title: eTitle.trim(), questions: qs, entryCount: 0 });
-                DB.add('notifications', { title: 'امتحان جديد!', message: eTitle.trim() });
+                await dbAdd('exams', { subjectId: selSub, title: eTitle.trim(), questions: qs, entryCount: 0 });
+                await dbAdd('notifications', { title: 'امتحان جديد!', message: eTitle.trim() });
             }
             setTab('stats'); setQs([]); setETitle(''); setSelSub('');
         };
