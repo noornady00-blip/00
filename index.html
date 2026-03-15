@@ -135,21 +135,21 @@
         });
     }
 
-    // Collection path in Firestore: /data/{col}
-    const COL = col => ['data', col];
-
-    const DB = {
-        async add(col, data)         { const fs = await waitFS(); return addDoc ? null : await fs.add(fs.col(...COL(col)), data); },
-        async update(col, id, data)  { const fs = await waitFS(); await fs.set(fs.doc(...COL(col), id), data); },
-        async remove(col, id)        { const fs = await waitFS(); await fs.del(fs.doc(...COL(col), id)); },
-        async listen(col, cb)        { const fs = await waitFS(); return fs.snap(fs.col(...COL(col)), snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))); },
-    };
-    // Shortcut add that waits for FS
-    async function dbAdd(col, data) { const fs = await waitFS(); return fs.add(fs.col(...COL(col)), data); }
-    async function dbUpdate(col, id, data) { const fs = await waitFS(); return fs.set(fs.doc(...COL(col), id), data); }
-    async function dbRemove(col, id) { const fs = await waitFS(); return fs.del(fs.doc(...COL(col), id)); }
+    // Firebase helper functions — col is top-level collection name e.g. 'subjects'
+    async function dbAdd(col, data) {
+        const fs = await waitFS();
+        return fs.add(fs.col(col), data);
+    }
+    async function dbUpdate(col, id, data) {
+        const fs = await waitFS();
+        return fs.set(fs.doc(col, id), data);
+    }
+    async function dbRemove(col, id) {
+        const fs = await waitFS();
+        return fs.del(fs.doc(col, id));
+    }
     function dbListen(col, cb) {
-        waitFS().then(fs => fs.snap(fs.col(...COL(col)), snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+        waitFS().then(fs => fs.snap(fs.col(col), snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
     }
 
     /* ─── Shared Components ─────────────────────────────────────────────── */
